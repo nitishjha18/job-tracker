@@ -1,0 +1,157 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteApplication = exports.updateApplication = exports.getApplicationById = exports.getAllApplications = exports.createApplication = void 0;
+const client_1 = require("@prisma/client");
+const db_1 = __importDefault(require("../../config/db"));
+const createApplication = async (userId, data) => {
+    const now = new Date();
+    return db_1.default.$transaction(async (tx) => {
+        const application = await tx.application.create({
+            data: {
+                userId,
+                companyName: data.companyName,
+                role: data.role,
+                jobDescription: data.jobDescription,
+                source: data.source,
+                notes: data.notes,
+                appliedAt: data.appliedAt ?? now,
+                status: client_1.ApplicationStatus.APPLIED,
+            },
+        });
+        await tx.statusHistory.create({
+            data: {
+                applicationId: application.id,
+                status: client_1.ApplicationStatus.APPLIED,
+                changedAt: now,
+            },
+        });
+        return application;
+    });
+};
+exports.createApplication = createApplication;
+const getAllApplications = async (userId) => {
+    return db_1.default.application.findMany({
+        where: { userId },
+        orderBy: { appliedAt: "desc" },
+        include: {
+            statusHistory: {
+                orderBy: { changedAt: "desc" },
+            },
+        },
+    });
+};
+exports.getAllApplications = getAllApplications;
+const getApplicationById = async (userId, applicationId) => {
+    const application = await db_1.default.application.findFirst({
+        where: {
+            id: applicationId,
+            userId,
+        },
+        include: {
+            statusHistory: {
+                orderBy: { changedAt: "desc" },
+            },
+        },
+    });
+    if (!application) {
+        throw new Error("Application not found");
+    }
+    return application;
+};
+exports.getApplicationById = getApplicationById;
+const updateApplication = async (userId, applicationId, data) => {
+    const existing = await db_1.default.application.findFirst({
+        where: {
+            id: applicationId,
+            userId,
+        },
+    });
+    if (!existing) {
+        throw new Error("Application not found");
+    }
+    const shouldCreateStatusHistory = data.status !== undefined && data.status !== existing.status;
+    return db_1.default.$transaction(async (tx) => {
+        const updateData = {};
+        if (data.companyName !== undefined)
+            updateData.companyName = data.companyName;
+        if (data.role !== undefined)
+            updateData.role = data.role;
+        if (data.jobDescription !== undefined)
+            updateData.jobDescription = data.jobDescription;
+        if (data.source !== undefined)
+            updateData.source = data.source;
+        if (data.status !== undefined)
+            updateData.status = data.status;
+        if (data.notes !== undefined)
+            updateData.notes = data.notes;
+        if (data.reminderDate !== undefined)
+            updateData.reminderDate = data.reminderDate;
+        if (data.appliedAt !== undefined)
+            updateData.appliedAt = data.appliedAt;
+        const updateResult = await tx.application.updateMany({
+            where: {
+                id: applicationId,
+                userId,
+            },
+            data: updateData,
+        });
+        if (updateResult.count === 0) {
+            throw new Error("Application not found");
+        }
+        if (shouldCreateStatusHistory && data.status) {
+            await tx.statusHistory.create({
+                data: {
+                    applicationId,
+                    status: data.status,
+                    changedAt: new Date(),
+                },
+            });
+        }
+        const updatedApplication = await tx.application.findFirst({
+            where: {
+                id: applicationId,
+                userId,
+            },
+        });
+        if (!updatedApplication) {
+            throw new Error("Application not found");
+        }
+        return updatedApplication;
+    });
+};
+exports.updateApplication = updateApplication;
+const deleteApplication = async (userId, applicationId) => {
+    const existing = await db_1.default.application.findFirst({
+        where: {
+            id: applicationId,
+            userId,
+        },
+    });
+    if (!existing) {
+        throw new Error("Application not found");
+    }
+    await db_1.default.$transaction(async (tx) => {
+        await tx.statusHistory.deleteMany({
+            where: {
+                applicationId,
+                application: {
+                    userId,
+                },
+            },
+        });
+        const deleteResult = await tx.application.deleteMany({
+            where: {
+                id: applicationId,
+                userId,
+            },
+        });
+        if (deleteResult.count === 0) {
+            throw new Error("Application not found");
+        }
+    });
+    return { message: "Application deleted successfully" };
+};
+exports.deleteApplication = deleteApplication;

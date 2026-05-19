@@ -1,0 +1,195 @@
+import { ApplicationSource, ApplicationStatus } from "@prisma/client";
+import prisma from "../../config/db";
+
+type CreateApplicationInput = {
+  companyName: string;
+  role: string;
+  jobDescription?: string;
+  source: ApplicationSource;
+  notes?: string;
+  appliedAt?: Date;
+};
+
+type UpdateApplicationInput = {
+  companyName?: string;
+  role?: string;
+  jobDescription?: string;
+  source?: ApplicationSource;
+  status?: ApplicationStatus;
+  notes?: string;
+  reminderDate?: Date;
+  appliedAt?: Date;
+};
+
+export const createApplication = async (
+  userId: string,
+  data: CreateApplicationInput,
+) => {
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const application = await tx.application.create({
+      data: {
+        userId,
+        companyName: data.companyName,
+        role: data.role,
+        jobDescription: data.jobDescription,
+        source: data.source,
+        notes: data.notes,
+        appliedAt: data.appliedAt ?? now,
+        status: ApplicationStatus.APPLIED,
+      } as any,
+    });
+
+    await tx.statusHistory.create({
+      data: {
+        applicationId: application.id,
+        status: ApplicationStatus.APPLIED,
+        changedAt: now,
+      } as any,
+    });
+
+    return application;
+  });
+};
+
+export const getAllApplications = async (userId: string) => {
+  return prisma.application.findMany({
+    where: { userId },
+    orderBy: { appliedAt: "desc" } as any,
+    include: {
+      statusHistory: {
+        orderBy: { changedAt: "desc" } as any,
+      },
+    },
+  });
+};
+
+export const getApplicationById = async (
+  userId: string,
+  applicationId: string,
+) => {
+  const application = await prisma.application.findFirst({
+    where: {
+      id: applicationId,
+      userId,
+    },
+    include: {
+      statusHistory: {
+        orderBy: { changedAt: "desc" } as any,
+      },
+    },
+  });
+
+  if (!application) {
+    throw new Error("Application not found");
+  }
+
+  return application;
+};
+
+export const updateApplication = async (
+  userId: string,
+  applicationId: string,
+  data: UpdateApplicationInput,
+) => {
+  const existing = await prisma.application.findFirst({
+    where: {
+      id: applicationId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Application not found");
+  }
+
+  const shouldCreateStatusHistory =
+    data.status !== undefined && data.status !== existing.status;
+
+  return prisma.$transaction(async (tx) => {
+    const updateData: Record<string, unknown> = {};
+
+    if (data.companyName !== undefined) updateData.companyName = data.companyName;
+    if (data.role !== undefined) updateData.role = data.role;
+    if (data.jobDescription !== undefined)
+      updateData.jobDescription = data.jobDescription;
+    if (data.source !== undefined) updateData.source = data.source;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.reminderDate !== undefined) updateData.reminderDate = data.reminderDate;
+    if (data.appliedAt !== undefined) updateData.appliedAt = data.appliedAt;
+
+    const updateResult = await tx.application.updateMany({
+      where: {
+        id: applicationId,
+        userId,
+      },
+      data: updateData as any,
+    });
+
+    if (updateResult.count === 0) {
+      throw new Error("Application not found");
+    }
+
+    if (shouldCreateStatusHistory && data.status) {
+      await tx.statusHistory.create({
+        data: {
+          applicationId,
+          status: data.status,
+          changedAt: new Date(),
+        } as any,
+      });
+    }
+
+    const updatedApplication = await tx.application.findFirst({
+      where: {
+        id: applicationId,
+        userId,
+      },
+    });
+
+    if (!updatedApplication) {
+      throw new Error("Application not found");
+    }
+
+    return updatedApplication;
+  });
+};
+
+export const deleteApplication = async (userId: string, applicationId: string) => {
+  const existing = await prisma.application.findFirst({
+    where: {
+      id: applicationId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Application not found");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.statusHistory.deleteMany({
+      where: {
+        applicationId,
+        application: {
+          userId,
+        },
+      },
+    });
+
+    const deleteResult = await tx.application.deleteMany({
+      where: {
+        id: applicationId,
+        userId,
+      },
+    });
+
+    if (deleteResult.count === 0) {
+      throw new Error("Application not found");
+    }
+  });
+
+  return { message: "Application deleted successfully" };
+};
