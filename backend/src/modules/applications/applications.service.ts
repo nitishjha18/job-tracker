@@ -1,24 +1,27 @@
-import { ApplicationSource, ApplicationStatus } from "@prisma/client";
+import {
+  ApplicationSource,
+  ApplicationStatus,
+  Prisma,
+} from "@prisma/client";
 import prisma from "../../config/db";
 
 type CreateApplicationInput = {
   companyName: string;
-  role: string;
+  jobTitle: string;
   jobDescription?: string;
   source: ApplicationSource;
   notes?: string;
-  appliedAt?: Date;
+  dateApplied?: Date;
 };
 
 type UpdateApplicationInput = {
   companyName?: string;
-  role?: string;
+  jobTitle?: string;
   jobDescription?: string;
   source?: ApplicationSource;
   status?: ApplicationStatus;
   notes?: string;
-  reminderDate?: Date;
-  appliedAt?: Date;
+  dateApplied?: Date;
 };
 
 export const createApplication = async (
@@ -32,21 +35,21 @@ export const createApplication = async (
       data: {
         userId,
         companyName: data.companyName,
-        role: data.role,
-        jobDescription: data.jobDescription,
+        jobTitle: data.jobTitle,
+        jobDescription: data.jobDescription ?? "",
         source: data.source,
         notes: data.notes,
-        appliedAt: data.appliedAt ?? now,
+        dateApplied: data.dateApplied ?? now,
         status: ApplicationStatus.APPLIED,
-      } as any,
+      },
     });
 
     await tx.statusHistory.create({
       data: {
         applicationId: application.id,
         status: ApplicationStatus.APPLIED,
-        changedAt: now,
-      } as any,
+        createdAt: now,
+      },
     });
 
     return application;
@@ -56,10 +59,10 @@ export const createApplication = async (
 export const getAllApplications = async (userId: string) => {
   return prisma.application.findMany({
     where: { userId },
-    orderBy: { appliedAt: "desc" } as any,
+    orderBy: { dateApplied: "desc" },
     include: {
       statusHistory: {
-        orderBy: { changedAt: "desc" } as any,
+        orderBy: { createdAt: "desc" },
       },
     },
   });
@@ -76,7 +79,7 @@ export const getApplicationById = async (
     },
     include: {
       statusHistory: {
-        orderBy: { changedAt: "desc" } as any,
+        orderBy: { createdAt: "desc" },
       },
     },
   });
@@ -108,24 +111,23 @@ export const updateApplication = async (
     data.status !== undefined && data.status !== existing.status;
 
   return prisma.$transaction(async (tx) => {
-    const updateData: Record<string, unknown> = {};
+    const updateData: Prisma.ApplicationUpdateManyMutationInput = {};
 
     if (data.companyName !== undefined) updateData.companyName = data.companyName;
-    if (data.role !== undefined) updateData.role = data.role;
+    if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle;
     if (data.jobDescription !== undefined)
       updateData.jobDescription = data.jobDescription;
     if (data.source !== undefined) updateData.source = data.source;
     if (data.status !== undefined) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.reminderDate !== undefined) updateData.reminderDate = data.reminderDate;
-    if (data.appliedAt !== undefined) updateData.appliedAt = data.appliedAt;
+    if (data.dateApplied !== undefined) updateData.dateApplied = data.dateApplied;
 
     const updateResult = await tx.application.updateMany({
       where: {
         id: applicationId,
         userId,
       },
-      data: updateData as any,
+      data: updateData,
     });
 
     if (updateResult.count === 0) {
@@ -137,8 +139,8 @@ export const updateApplication = async (
         data: {
           applicationId,
           status: data.status,
-          changedAt: new Date(),
-        } as any,
+          createdAt: new Date(),
+        },
       });
     }
 
@@ -146,6 +148,11 @@ export const updateApplication = async (
       where: {
         id: applicationId,
         userId,
+      },
+      include: {
+        statusHistory: {
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
 

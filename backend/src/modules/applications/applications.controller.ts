@@ -8,13 +8,13 @@ import {
 } from "./applications.service";
 
 type AuthenticatedRequest = Request & {
-  user?: {
+  user: {
     id: string;
   };
 };
 
-const getLocalUserId = (req: AuthenticatedRequest): string | null => {
-  return req.user?.id ?? null;
+const getLocalUserId = (req: AuthenticatedRequest): string => {
+  return req.user.id;
 };
 
 export const createApplicationController = async (
@@ -23,28 +23,24 @@ export const createApplicationController = async (
 ) => {
   try {
     const userId = getLocalUserId(req as AuthenticatedRequest);
-    if (!userId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
 
-    const { companyName, role, jobDescription, source, notes, appliedAt } =
+    const { companyName, jobTitle, jobDescription, source, notes, dateApplied } =
       req.body;
 
-    if (!companyName || !role || !source) {
+    if (!companyName || !jobTitle || !source) {
       res.status(400).json({
-        error: "companyName, role, and source are required",
+        error: "companyName, jobTitle, and source are required",
       });
       return;
     }
 
     const application = await createApplication(userId, {
       companyName,
-      role,
+      jobTitle,
       jobDescription,
       source,
       notes,
-      appliedAt: appliedAt ? new Date(appliedAt) : undefined,
+      dateApplied: dateApplied ? new Date(dateApplied) : undefined,
     });
 
     res.status(201).json({ application });
@@ -61,10 +57,6 @@ export const getAllApplicationsController = async (
 ) => {
   try {
     const userId = getLocalUserId(req as AuthenticatedRequest);
-    if (!userId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
 
     const applications = await getAllApplications(userId);
     res.status(200).json({ applications });
@@ -81,10 +73,6 @@ export const getApplicationByIdController = async (
 ) => {
   try {
     const userId = getLocalUserId(req as AuthenticatedRequest);
-    if (!userId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
 
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const application = await getApplicationById(userId, id);
@@ -107,32 +95,26 @@ export const updateApplicationController = async (
 ) => {
   try {
     const userId = getLocalUserId(req as AuthenticatedRequest);
-    if (!userId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
 
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const {
       companyName,
-      role,
+      jobTitle,
       jobDescription,
       source,
       status,
       notes,
-      reminderDate,
-      appliedAt,
+      dateApplied,
     } = req.body;
 
     const application = await updateApplication(userId, id, {
       companyName,
-      role,
+      jobTitle,
       jobDescription,
       source,
       status,
       notes,
-      reminderDate: reminderDate ? new Date(reminderDate) : undefined,
-      appliedAt: appliedAt ? new Date(appliedAt) : undefined,
+      dateApplied: dateApplied ? new Date(dateApplied) : undefined,
     });
 
     res.status(200).json({ application });
@@ -154,10 +136,6 @@ export const deleteApplicationController = async (
 ) => {
   try {
     const userId = getLocalUserId(req as AuthenticatedRequest);
-    if (!userId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
 
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await deleteApplication(userId, id);

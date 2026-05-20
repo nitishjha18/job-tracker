@@ -13,11 +13,11 @@ const createApplication = async (userId, data) => {
             data: {
                 userId,
                 companyName: data.companyName,
-                role: data.role,
-                jobDescription: data.jobDescription,
+                jobTitle: data.jobTitle,
+                jobDescription: data.jobDescription ?? "",
                 source: data.source,
                 notes: data.notes,
-                appliedAt: data.appliedAt ?? now,
+                dateApplied: data.dateApplied ?? now,
                 status: client_1.ApplicationStatus.APPLIED,
             },
         });
@@ -25,7 +25,7 @@ const createApplication = async (userId, data) => {
             data: {
                 applicationId: application.id,
                 status: client_1.ApplicationStatus.APPLIED,
-                changedAt: now,
+                createdAt: now,
             },
         });
         return application;
@@ -35,10 +35,10 @@ exports.createApplication = createApplication;
 const getAllApplications = async (userId) => {
     return db_1.default.application.findMany({
         where: { userId },
-        orderBy: { appliedAt: "desc" },
+        orderBy: { dateApplied: "desc" },
         include: {
             statusHistory: {
-                orderBy: { changedAt: "desc" },
+                orderBy: { createdAt: "desc" },
             },
         },
     });
@@ -52,7 +52,7 @@ const getApplicationById = async (userId, applicationId) => {
         },
         include: {
             statusHistory: {
-                orderBy: { changedAt: "desc" },
+                orderBy: { createdAt: "desc" },
             },
         },
     });
@@ -77,8 +77,8 @@ const updateApplication = async (userId, applicationId, data) => {
         const updateData = {};
         if (data.companyName !== undefined)
             updateData.companyName = data.companyName;
-        if (data.role !== undefined)
-            updateData.role = data.role;
+        if (data.jobTitle !== undefined)
+            updateData.jobTitle = data.jobTitle;
         if (data.jobDescription !== undefined)
             updateData.jobDescription = data.jobDescription;
         if (data.source !== undefined)
@@ -87,10 +87,8 @@ const updateApplication = async (userId, applicationId, data) => {
             updateData.status = data.status;
         if (data.notes !== undefined)
             updateData.notes = data.notes;
-        if (data.reminderDate !== undefined)
-            updateData.reminderDate = data.reminderDate;
-        if (data.appliedAt !== undefined)
-            updateData.appliedAt = data.appliedAt;
+        if (data.dateApplied !== undefined)
+            updateData.dateApplied = data.dateApplied;
         const updateResult = await tx.application.updateMany({
             where: {
                 id: applicationId,
@@ -106,7 +104,7 @@ const updateApplication = async (userId, applicationId, data) => {
                 data: {
                     applicationId,
                     status: data.status,
-                    changedAt: new Date(),
+                    createdAt: new Date(),
                 },
             });
         }
@@ -114,6 +112,11 @@ const updateApplication = async (userId, applicationId, data) => {
             where: {
                 id: applicationId,
                 userId,
+            },
+            include: {
+                statusHistory: {
+                    orderBy: { createdAt: "desc" },
+                },
             },
         });
         if (!updatedApplication) {

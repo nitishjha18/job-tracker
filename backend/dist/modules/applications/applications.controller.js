@@ -3,29 +3,25 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteApplicationController = exports.updateApplicationController = exports.getApplicationByIdController = exports.getAllApplicationsController = exports.createApplicationController = void 0;
 const applications_service_1 = require("./applications.service");
 const getLocalUserId = (req) => {
-    return req.user?.id ?? null;
+    return req.user.id;
 };
 const createApplicationController = async (req, res) => {
     try {
         const userId = getLocalUserId(req);
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
-        const { companyName, role, jobDescription, source, notes, appliedAt } = req.body;
-        if (!companyName || !role || !source) {
+        const { companyName, jobTitle, jobDescription, source, notes, dateApplied } = req.body;
+        if (!companyName || !jobTitle || !source) {
             res.status(400).json({
-                error: "companyName, role, and source are required",
+                error: "companyName, jobTitle, and source are required",
             });
             return;
         }
         const application = await (0, applications_service_1.createApplication)(userId, {
             companyName,
-            role,
+            jobTitle,
             jobDescription,
             source,
             notes,
-            appliedAt: appliedAt ? new Date(appliedAt) : undefined,
+            dateApplied: dateApplied ? new Date(dateApplied) : undefined,
         });
         res.status(201).json({ application });
     }
@@ -39,10 +35,6 @@ exports.createApplicationController = createApplicationController;
 const getAllApplicationsController = async (req, res) => {
     try {
         const userId = getLocalUserId(req);
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
         const applications = await (0, applications_service_1.getAllApplications)(userId);
         res.status(200).json({ applications });
     }
@@ -56,10 +48,6 @@ exports.getAllApplicationsController = getAllApplicationsController;
 const getApplicationByIdController = async (req, res) => {
     try {
         const userId = getLocalUserId(req);
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
         const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
         const application = await (0, applications_service_1.getApplicationById)(userId, id);
         res.status(200).json({ application });
@@ -78,21 +66,16 @@ exports.getApplicationByIdController = getApplicationByIdController;
 const updateApplicationController = async (req, res) => {
     try {
         const userId = getLocalUserId(req);
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
         const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-        const { companyName, role, jobDescription, source, status, notes, reminderDate, appliedAt, } = req.body;
+        const { companyName, jobTitle, jobDescription, source, status, notes, dateApplied, } = req.body;
         const application = await (0, applications_service_1.updateApplication)(userId, id, {
             companyName,
-            role,
+            jobTitle,
             jobDescription,
             source,
             status,
             notes,
-            reminderDate: reminderDate ? new Date(reminderDate) : undefined,
-            appliedAt: appliedAt ? new Date(appliedAt) : undefined,
+            dateApplied: dateApplied ? new Date(dateApplied) : undefined,
         });
         res.status(200).json({ application });
     }
@@ -110,10 +93,6 @@ exports.updateApplicationController = updateApplicationController;
 const deleteApplicationController = async (req, res) => {
     try {
         const userId = getLocalUserId(req);
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
         const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
         const result = await (0, applications_service_1.deleteApplication)(userId, id);
         res.status(200).json(result);

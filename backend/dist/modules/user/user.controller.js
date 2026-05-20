@@ -11,10 +11,13 @@ const syncUserController = async (req, res) => {
             return;
         }
         const clerkUser = await express_1.clerkClient.users.getUser(userId);
-        const user = await (0, user_service_1.syncUser)(userId, `${clerkUser.firstName} ${clerkUser.lastName}`, clerkUser.emailAddresses[0].emailAddress, clerkUser.imageUrl);
+        const name = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
+            clerkUser.emailAddresses[0].emailAddress;
+        const user = await (0, user_service_1.syncUser)(userId, name, clerkUser.emailAddresses[0].emailAddress, clerkUser.imageUrl);
         res.status(200).json({ user });
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -34,6 +37,7 @@ const getProfileController = async (req, res) => {
         res.status(200).json({ user });
     }
     catch (error) {
+        console.error(error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

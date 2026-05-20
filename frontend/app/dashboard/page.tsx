@@ -1,11 +1,12 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { UserButton } from "@clerk/nextjs";
 import { useEffect } from "react";
 
 export default function Dashboard() {
   const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
 
   useEffect(() => {
     if (isLoaded && user) {
@@ -21,6 +22,15 @@ export default function Dashboard() {
         .catch((err) => console.error("Sync failed:", err));
     }
   }, [isLoaded, user]);
+
+
+  useEffect(() => {
+    const fetchToken = async () => {
+      const token = await getToken();
+      console.log("Clerk token:", token);
+    };
+    fetchToken();
+  }, []);
 
   if (!isLoaded) return <div>Loading...</div>;
 

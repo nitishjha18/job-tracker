@@ -11,16 +11,20 @@ export const syncUserController = async (req: Request, res: Response) => {
     }
 
     const clerkUser = await clerkClient.users.getUser(userId);
+    const name =
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
+      clerkUser.emailAddresses[0].emailAddress;
 
     const user = await syncUser(
       userId,
-      `${clerkUser.firstName} ${clerkUser.lastName}`,
+      name,
       clerkUser.emailAddresses[0].emailAddress,
       clerkUser.imageUrl,
     );
 
     res.status(200).json({ user });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -41,6 +45,7 @@ export const getProfileController = async (req: Request, res: Response) => {
 
     res.status(200).json({ user });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
