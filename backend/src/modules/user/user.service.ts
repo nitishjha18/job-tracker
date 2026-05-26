@@ -29,3 +29,10 @@ export const getUserByClerkId = async (clerkId: string) => {
     where: { clerkId },
   });
 };
+
+export const updateResumeUrl = async (userId: string, resumeUrl: string) => {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { resumeUrl },
+  });
+};
