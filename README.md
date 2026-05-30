@@ -1,6 +1,4 @@
-# Job Tracker
-
-Job Tracker is a full-stack web application for students and freshers who need a structured way to manage job applications. The long-term product goal is to replace spreadsheet-based tracking with a single application that supports authentication, job application tracking, resume analysis, interview preparation, reminders, and analytics.
+Tracker is a full-stack web application for students and freshers who need a structured way to manage job applications. The long-term product goal is to replace spreadsheet-based tracking with a single application that supports authentication, job application tracking, resume analysis, interview preparation, reminders, and analytics.
 
 The current repository is in an early foundation stage. Authentication, user synchronization, the base backend server, the base frontend app, and the database schema are present. Most product features described in the PRD are still planned and not yet implemented.
 
