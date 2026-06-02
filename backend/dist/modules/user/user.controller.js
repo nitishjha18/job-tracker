@@ -8,6 +8,7 @@ const express_1 = require("@clerk/express");
 const multer_1 = __importDefault(require("multer"));
 const supabase_1 = require("../../config/supabase");
 const user_service_1 = require("./user.service");
+const pdfParse = require("pdf-parse");
 const syncUserController = async (req, res) => {
     try {
         const { userId } = (0, express_1.getAuth)(req);
@@ -60,6 +61,8 @@ const uploadResumeController = async (req, res) => {
             return;
         }
         const user = req.user;
+        const pdfData = await pdfParse(req.file.buffer);
+        const resumeText = pdfData.text;
         const filePath = `${user.id}/resume.pdf`;
         const { error } = await supabase_1.supabase.storage
             .from("resumes")
@@ -73,10 +76,11 @@ const uploadResumeController = async (req, res) => {
             return;
         }
         const publicUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/resumes/${filePath}`;
-        const updatedUser = await (0, user_service_1.updateResumeUrl)(user.id, publicUrl);
+        const updatedUser = await (0, user_service_1.updateResumeUrl)(user.id, publicUrl, resumeText);
         res.status(200).json({
             message: "Resume uploaded successfully",
             resumeUrl: updatedUser.resumeUrl,
+            resumeText: updatedUser.resumeText,
         });
     }
     catch (error) {

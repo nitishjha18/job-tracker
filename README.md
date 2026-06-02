@@ -1,6 +1,6 @@
 Tracker is a full-stack web application for students and freshers who need a structured way to manage job applications. The long-term product goal is to replace spreadsheet-based tracking with a single application that supports authentication, job application tracking, resume analysis, interview preparation, reminders, and analytics.
 
-The current repository is in an early foundation stage. Authentication, user synchronization, the base backend server, the base frontend app, and the database schema are present. Most product features described in the PRD are still planned and not yet implemented.
+The current repository now includes a working backend foundation, user sync/profile APIs, applications CRUD APIs, and resume upload to Supabase Storage. Frontend feature work is still mostly pending.
 
 ## Current Status
 
@@ -13,6 +13,14 @@ Implemented:
 - Initial Prisma migration.
 - User sync from Clerk into the local database.
 - User profile fetch endpoint.
+- Resume upload endpoint (PDF only) with Supabase Storage and DB `resumeUrl` update.
+- Applications CRUD backend module:
+  - create application
+  - list applications
+  - get one application
+  - update application
+  - delete application
+- Status history creation on application create and on status change.
 - Next.js frontend with TypeScript.
 - Clerk provider in the frontend root layout.
 - Protected frontend routes through Clerk middleware.
@@ -21,12 +29,10 @@ Implemented:
 
 Not implemented yet:
 
-- Job application CRUD API.
 - Kanban board.
 - Drag and drop status updates.
 - Application detail page.
-- Resume upload.
-- Resume parsing or Supabase Storage integration.
+- Resume parsing.
 - Gemini resume analysis.
 - Gemini interview question generation.
 - Saved interview answers.
@@ -152,6 +158,12 @@ Current routes:
 GET  /health
 POST /api/user/sync
 GET  /api/user/profile
+POST /api/user/resume
+POST /api/applications
+GET  /api/applications
+GET  /api/applications/:id
+PUT  /api/applications/:id
+DELETE /api/applications/:id
 ```
 
 Protected routes use Clerk auth through `requireUser`.
@@ -218,12 +230,14 @@ DIRECT_URL="postgresql://user:password@host:port/database"
 
 CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
 
 GEMINI_API_KEY=...
 RESEND_API_KEY=...
 ```
 
-Only the Clerk and database variables are needed for the currently implemented backend flow. Gemini and Resend are for planned features.
+Only Clerk, database, and Supabase variables are needed for currently implemented backend flows. Gemini and Resend are for planned features.
 
 ### Frontend
 
@@ -326,7 +340,6 @@ Known build warning:
 ### Phase 1: Core Tracking
 
 - Complete user profile flow.
-- Add application CRUD backend module.
 - Add application list page.
 - Add application detail page.
 - Add status update support.
@@ -334,7 +347,6 @@ Known build warning:
 
 ### Phase 2: AI Features
 
-- Add resume upload.
 - Extract or store resume text.
 - Add Gemini resume analysis against job descriptions.
 - Add Gemini interview question generation.

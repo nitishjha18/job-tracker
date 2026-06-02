@@ -30,9 +30,14 @@ export const getUserByClerkId = async (clerkId: string) => {
   });
 };
 
-export const updateResumeUrl = async (userId: string, resumeUrl: string) => {
+export const updateResumeUrl = async (
+  userId: string, 
+  resumeUrl: string,
+  resumeText: string,
+) => {
   return prisma.user.update({
     where: { id: userId },
-    data: { resumeUrl },
+    data: { resumeUrl, resumeText },
   });
 };
+

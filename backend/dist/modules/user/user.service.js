@@ -28,10 +28,10 @@ const getUserByClerkId = async (clerkId) => {
     });
 };
 exports.getUserByClerkId = getUserByClerkId;
-const updateResumeUrl = async (userId, resumeUrl) => {
+const updateResumeUrl = async (userId, resumeUrl, resumeText) => {
     return db_1.default.user.update({
         where: { id: userId },
-        data: { resumeUrl },
+        data: { resumeUrl, resumeText },
     });
 };
 exports.updateResumeUrl = updateResumeUrl;
