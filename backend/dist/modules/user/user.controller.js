@@ -3,12 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.uploadResumeController = exports.uploadMiddleware = exports.getProfileController = exports.syncUserController = void 0;
+exports.updateProfileController = exports.uploadResumeController = exports.uploadMiddleware = exports.getProfileController = exports.syncUserController = void 0;
 const express_1 = require("@clerk/express");
 const multer_1 = __importDefault(require("multer"));
 const supabase_1 = require("../../config/supabase");
 const user_service_1 = require("./user.service");
-const pdfParse = require("pdf-parse");
+const PDFParser = require("pdf2json");
 const syncUserController = async (req, res) => {
     try {
         const { userId } = (0, express_1.getAuth)(req);
@@ -61,8 +61,25 @@ const uploadResumeController = async (req, res) => {
             return;
         }
         const user = req.user;
-        const pdfData = await pdfParse(req.file.buffer);
-        const resumeText = pdfData.text;
+        const resumeText = await new Promise((resolve, reject) => {
+            const pdfParser = new PDFParser();
+            pdfParser.on("pdfParser_dataReady", (pdfData) => {
+                let text = "";
+                pdfData.Pages.forEach((page) => {
+                    page.Texts.forEach((textItem) => {
+                        textItem.R.forEach((r) => {
+                            text += decodeURIComponent(r.T) + " ";
+                        });
+                    });
+                    text += "\n";
+                });
+                resolve(text.trim());
+            });
+            pdfParser.on("pdfParser_dataError", (error) => {
+                reject(error);
+            });
+            pdfParser.parseBuffer(req.file.buffer);
+        });
         const filePath = `${user.id}/resume.pdf`;
         const { error } = await supabase_1.supabase.storage
             .from("resumes")
@@ -89,3 +106,20 @@ const uploadResumeController = async (req, res) => {
     }
 };
 exports.uploadResumeController = uploadResumeController;
+const updateProfileController = async (req, res) => {
+    try {
+        const user = req.user;
+        const { name, targetRole, experienceLevel } = req.body;
+        const updatedUser = await (0, user_service_1.updateUserProfile)(user.id, {
+            name,
+            targetRole,
+            experienceLevel
+        });
+        res.status(200).json({ user: updatedUser });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+exports.updateProfileController = updateProfileController;

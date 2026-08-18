@@ -41,3 +41,17 @@ export const updateResumeUrl = async (
   });
 };
 
+export const updateUserProfile = async (
+  userId: string,
+  data: {
+    name?: string;
+    targetRole?: string;
+    experienceLevel?: string;
+  }
+) => {
+  return prisma.user.update({
+    where: { id: userId },
+    data
+  })
+}
+

@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { clerkAuth } from "./middleware/auth";
 import userRoutes from "./modules/user/user.routes";
 import applicationsRouter from "./modules/applications/applications.routes";
+import aiRouter from "./modules/ai/ai.routes"
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use(cookieParser());
 app.use(clerkAuth); // Clerk runs on every request
 app.use("/api/user", userRoutes);
 app.use("/api/applications", applicationsRouter);
+app.use("/api/ai", aiRouter)
 // Health check
 app.get("/health", (req, res) => {
   res.status(200).json({ message: "Job tracker's server is live" });

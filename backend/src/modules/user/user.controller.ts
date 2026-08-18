@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import multer from "multer";
 import { supabase } from "../../config/supabase";
-import { syncUser, getUserByClerkId, updateResumeUrl } from "./user.service";
+import { syncUser, getUserByClerkId, updateResumeUrl, updateUserProfile } from "./user.service"
 const PDFParser = require("pdf2json");
 
 export const syncUserController = async (req: Request, res: Response) => {
@@ -51,7 +51,7 @@ export const getProfileController = async (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
-};
+ };
 
 const upload = multer({ storage: multer.memoryStorage() });
 export const uploadMiddleware = upload.single("resume");
@@ -121,3 +121,22 @@ const resumeText = await new Promise<string>((resolve, reject) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+export const updateProfileController = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user
+    const { name, targetRole, experienceLevel } = req.body
+
+    const updatedUser = await updateUserProfile(user.id, {
+      name,
+      targetRole,
+      experienceLevel
+    })
+
+    res.status(200).json({ user: updatedUser })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+}

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateResumeUrl = exports.getUserByClerkId = exports.syncUser = void 0;
+exports.updateUserProfile = exports.updateResumeUrl = exports.getUserByClerkId = exports.syncUser = void 0;
 const db_1 = __importDefault(require("../../config/db"));
 const syncUser = async (clerkId, name, email, profilePicture) => {
     const existingUser = await db_1.default.user.findUnique({
@@ -35,3 +35,10 @@ const updateResumeUrl = async (userId, resumeUrl, resumeText) => {
     });
 };
 exports.updateResumeUrl = updateResumeUrl;
+const updateUserProfile = async (userId, data) => {
+    return db_1.default.user.update({
+        where: { id: userId },
+        data
+    });
+};
+exports.updateUserProfile = updateUserProfile;
