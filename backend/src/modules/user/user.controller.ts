@@ -3,7 +3,7 @@ import { getAuth, clerkClient } from "@clerk/express";
 import multer from "multer";
 import { supabase } from "../../config/supabase";
 import { syncUser, getUserByClerkId, updateResumeUrl } from "./user.service";
-const pdfParse = require("pdf-parse");
+const PDFParser = require("pdf2json");
 
 export const syncUserController = async (req: Request, res: Response) => {
   try {
@@ -69,8 +69,28 @@ export const uploadResumeController = async (req: Request, res: Response) => {
     }
 
     const user = (req as any).user;
-    const pdfData = await pdfParse(req.file.buffer);
-    const resumeText = pdfData.text;
+const resumeText = await new Promise<string>((resolve, reject) => {
+  const pdfParser = new PDFParser();
+  
+  pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+    let text = ""
+    pdfData.Pages.forEach((page: any) => {
+      page.Texts.forEach((textItem: any) => {
+        textItem.R.forEach((r: any) => {
+          text += decodeURIComponent(r.T) + " "
+        })
+      })
+      text += "\n"
+    })
+    resolve(text.trim())
+  })
+  
+  pdfParser.on("pdfParser_dataError", (error: any) => {
+    reject(error)
+  })
+  
+  pdfParser.parseBuffer(req.file!.buffer)
+})
     const filePath = `${user.id}/resume.pdf`;
 
 
