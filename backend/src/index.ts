@@ -6,6 +6,8 @@ import { clerkAuth } from "./middleware/auth";
 import userRoutes from "./modules/user/user.routes";
 import applicationsRouter from "./modules/applications/applications.routes";
 import aiRouter from "./modules/ai/ai.routes"
+import remindersRouter from "./modules/reminders/reminders.routes"
+import { startReminderJob } from "./jobs/reminderJob"
 
 dotenv.config();
 
@@ -24,6 +26,7 @@ app.use(clerkAuth); // Clerk runs on every request
 app.use("/api/user", userRoutes);
 app.use("/api/applications", applicationsRouter);
 app.use("/api/ai", aiRouter)
+app.use("/api/reminders", remindersRouter)
 // Health check
 app.get("/health", (req, res) => {
   res.status(200).json({ message: "Job tracker's server is live" });
@@ -32,5 +35,6 @@ app.get("/health", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+startReminderJob()
 
 export default app;

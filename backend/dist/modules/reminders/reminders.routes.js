@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../../middleware/auth");
+const reminders_controller_1 = require("./reminders.controller");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireUser);
+router.post("/", reminders_controller_1.createReminderController);
+router.put("/:id", reminders_controller_1.updateReminderController);
+router.delete("/:id", reminders_controller_1.deleteReminderController);
+exports.default = router;

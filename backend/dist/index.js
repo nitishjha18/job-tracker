@@ -11,6 +11,8 @@ const auth_1 = require("./middleware/auth");
 const user_routes_1 = __importDefault(require("./modules/user/user.routes"));
 const applications_routes_1 = __importDefault(require("./modules/applications/applications.routes"));
 const ai_routes_1 = __importDefault(require("./modules/ai/ai.routes"));
+const reminders_routes_1 = __importDefault(require("./modules/reminders/reminders.routes"));
+const reminderJob_1 = require("./jobs/reminderJob");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -24,6 +26,7 @@ app.use(auth_1.clerkAuth); // Clerk runs on every request
 app.use("/api/user", user_routes_1.default);
 app.use("/api/applications", applications_routes_1.default);
 app.use("/api/ai", ai_routes_1.default);
+app.use("/api/reminders", reminders_routes_1.default);
 // Health check
 app.get("/health", (req, res) => {
     res.status(200).json({ message: "Job tracker's server is live" });
@@ -31,4 +34,5 @@ app.get("/health", (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+(0, reminderJob_1.startReminderJob)();
 exports.default = app;

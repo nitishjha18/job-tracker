@@ -106,6 +106,7 @@ model Reminder {
   userId        String
   reminderDate  DateTime
   isSent        Boolean     @default(false)
+  notes         String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
