@@ -1,63 +1,56 @@
-Tracker is a full-stack web application for students and freshers who need a structured way to manage job applications. The long-term product goal is to replace spreadsheet-based tracking with a single application that supports authentication, job application tracking, resume analysis, interview preparation, reminders, and analytics.
+# ApplynTrack
 
-The current repository now includes a working backend foundation, user sync/profile APIs, applications CRUD APIs, and resume upload to Supabase Storage. Frontend feature work is still mostly pending.
+ApplynTrack is a full-stack web application for students and freshers who need a structured way to manage job applications. It replaces spreadsheet-based tracking with a single application that supports authentication, job application tracking, AI-powered resume analysis, interview preparation, automated reminders, and analytics.
+
+The backend is now fully complete and tested. Frontend feature work is the next phase.
 
 ## Current Status
 
-Implemented:
+### Backend — Complete
 
 - Express backend with TypeScript.
 - Clerk authentication middleware on the backend.
-- Prisma client setup.
-- PostgreSQL schema through Prisma.
-- Initial Prisma migration.
+- Prisma ORM connected to PostgreSQL via Supabase.
 - User sync from Clerk into the local database.
-- User profile fetch endpoint.
-- Resume upload endpoint (PDF only) with Supabase Storage and DB `resumeUrl` update.
-- Applications CRUD backend module:
-  - create application
-  - list applications
-  - get one application
-  - update application
-  - delete application
-- Status history creation on application create and on status change.
+- User profile fetch and update endpoints.
+- Resume upload to Supabase Storage with PDF text extraction via pdf2json.
+- Applications CRUD module — create, list, get, update, delete with StatusHistory auto-tracking.
+- AI module — resume analysis and interview prep via Google Gemini API.
+- Save and fetch interview answers.
+- Reminders CRUD module — create, update, delete.
+- Daily cron job via node-cron — runs at 9am, sends HTML reminder emails via Resend.
+- Custom email domain — reminders@applyntrack.online.
+- Dashboard analytics endpoint — total applications, response rate, rejection rate, best source, stale applications.
+
+### Frontend — Minimal
+
 - Next.js frontend with TypeScript.
-- Clerk provider in the frontend root layout.
+- Clerk provider in the root layout.
 - Protected frontend routes through Clerk middleware.
 - Clerk sign-in page.
-- Basic dashboard page that calls the backend user sync endpoint.
+- Dashboard page with bearer token display for development testing.
 
-Not implemented yet:
+### Not Yet Built
 
 - Kanban board.
-- Drag and drop status updates.
-- Application detail page.
-- Resume parsing.
-- Gemini resume analysis.
-- Gemini interview question generation.
-- Saved interview answers.
-- Reminder API.
-- Daily reminder cron job.
-- Resend email integration.
-- Dashboard analytics API.
-- Shared frontend components.
+- Application list and detail pages.
+- Resume upload UI.
+- AI analysis UI.
+- Interview prep UI.
+- Dashboard analytics UI.
 - Frontend API client abstraction.
 - Automated tests.
 
-For a detailed session handoff and implementation map, see `task-update.md`.
-
 ## Product Objective
 
-The objective from `prd.md` is to build a smart job application tracker for final-year students, recent graduates, and freshers who apply to many roles at once.
-
-The intended product should help users:
+ApplynTrack helps final-year students, recent graduates, and freshers who apply to many roles at once to:
 
 - Track every job application in one place.
 - See the current stage of each application.
 - Store company, role, source, job description, notes, and application dates.
 - Use AI to compare a resume against a job description.
 - Use AI to generate interview preparation questions.
-- Set follow-up reminders.
+- Set follow-up reminders with email notifications.
 - View analytics about job search progress.
 
 This project is not intended to be a job board, resume builder, mobile app, collaborative workspace, or microservices architecture.
@@ -79,20 +72,20 @@ This project is not intended to be a job board, resume builder, mobile app, coll
 - TypeScript
 - Clerk Express SDK
 - Prisma ORM
-- PostgreSQL
+- PostgreSQL via Supabase
 
-### Planned Integrations
+### Integrations
 
-These packages are already present in the backend dependencies, but the feature modules are not implemented yet:
-
-- Google Gemini through `@google/generative-ai`
-- Resend for email
-- Node Cron for scheduled reminders
+- Google Gemini via `@google/generative-ai` — resume analysis and interview prep
+- Resend — transactional HTML emails
+- node-cron — daily reminder job scheduler
+- Supabase Storage — resume PDF storage
+- pdf2json — PDF text extraction
 
 ## Repository Structure
 
 ```text
-job-tracker/
+smarty-j/
   backend/
     prisma/
       migrations/
@@ -100,6 +93,8 @@ job-tracker/
     src/
       config/
         db.ts
+        gemini.ts
+        supabase.ts
       middleware/
         auth.ts
       modules/
@@ -107,8 +102,26 @@ job-tracker/
           user.controller.ts
           user.routes.ts
           user.service.ts
-      generated/
-        prisma/
+        applications/
+          applications.controller.ts
+          applications.routes.ts
+          applications.service.ts
+        ai/
+          ai.controller.ts
+          ai.routes.ts
+          ai.service.ts
+        reminders/
+          reminders.controller.ts
+          reminders.routes.ts
+          reminders.service.ts
+        dashboard/
+          dashboard.controller.ts
+          dashboard.routes.ts
+          dashboard.service.ts
+      jobs/
+        reminderJob.ts
+      utils/
+        email.ts
       index.ts
     package.json
     tsconfig.json
@@ -126,126 +139,83 @@ job-tracker/
     middleware.ts
     next.config.ts
     package.json
-    postcss.config.mjs
     tsconfig.json
-
-  prd.md
-  project-structure.md
-  task-update.md
-  README.md
 ```
 
-Note: `backend/src/generated/prisma` is generated Prisma output, not hand-written application logic.
-
-## Backend Overview
-
-The backend entrypoint is `backend/src/index.ts`.
-
-Current behavior:
-
-- Loads environment variables with `dotenv`.
-- Creates an Express app.
-- Enables CORS for the configured frontend origin.
-- Enables JSON body parsing.
-- Enables cookie parsing.
-- Runs Clerk middleware globally.
-- Mounts user routes at `/api/user`.
-- Exposes a health check at `/health`.
-
-Current routes:
+## API Endpoints
 
 ```text
 GET  /health
+
 POST /api/user/sync
 GET  /api/user/profile
+PUT  /api/user/profile
 POST /api/user/resume
-POST /api/applications
-GET  /api/applications
-GET  /api/applications/:id
-PUT  /api/applications/:id
+
+POST   /api/applications
+GET    /api/applications
+GET    /api/applications/:id
+PUT    /api/applications/:id
 DELETE /api/applications/:id
+
+POST /api/ai/analyze-resume
+POST /api/ai/interview-prep
+POST /api/ai/save-answers
+GET  /api/ai/answers/:appId
+
+POST   /api/reminders
+PUT    /api/reminders/:id
+DELETE /api/reminders/:id
+
+GET /api/dashboard/stats
 ```
 
-Protected routes use Clerk auth through `requireUser`.
-
-## Frontend Overview
-
-The frontend is a Next.js App Router application.
-
-Current pages:
-
-```text
-/                         Basic landing page
-/sign-in/[[...rest]]      Clerk sign-in page
-/dashboard                Protected dashboard page
-```
-
-Current behavior:
-
-- `frontend/app/layout.tsx` wraps the app in `ClerkProvider`.
-- `frontend/middleware.ts` protects all routes except `/`, `/sign-in`, and `/sign-up`.
-- `frontend/app/dashboard/page.tsx` reads the current Clerk user and calls the backend user sync route.
-
-Important current limitation:
-
-- The dashboard calls `http://localhost:5000/api/user/sync` directly. This should later be moved to an environment-based API client.
+All routes except `/health` are protected by Clerk authentication via `requireUser` middleware.
 
 ## Database Schema
 
-The Prisma schema is defined in `backend/prisma/schema.prisma`.
+Models:
 
-Current models:
+- `User` — clerkId, email, name, targetRole, experienceLevel, resumeUrl, resumeText
+- `Application` — userId, companyName, jobTitle, jobDescription, source, status, notes, dateApplied
+- `StatusHistory` — applicationId, status, createdAt
+- `AiInterview` — applicationId, overallScore, overallFeedback
+- `AiInterviewQuestion` — aiInterviewId, question, userAnswer, questionNumber
+- `Reminder` — userId, applicationId, reminderDate, isSent, notes
 
-- `User`
-- `Application`
-- `StatusHistory`
-- `AiInterview`
-- `AiInterviewQuestion`
-- `Reminder`
+Enums:
 
-Current enums:
-
-- `ApplicationStatus`
-- `ApplicationSource`
-
-Known schema cleanup needed:
-
-- `ApplicationSource` currently contains misspelled enum values: `NAUKARI`, `REFERAL`, and `COLDEMAIL`.
-- Because these values are already in the migration, correcting them should be done through a proper Prisma migration.
+- `ApplicationStatus` — APPLIED, SCREENING, INTERVIEW, ASSIGNMENT, OFFER, REJECTED
+- `ApplicationSource` — LINKED_IN, NAUKARI, REFERAL, COLDEMAIL, SOCIAL_MEDIA, OTHER_JOB_APPS
 
 ## Environment Variables
 
-Create environment files locally. Do not commit secrets.
-
-### Backend
-
-Create `backend/.env`:
+### Backend — `backend/.env`
 
 ```env
 PORT=5000
 CLIENT_URL=http://localhost:3000
 
-DATABASE_URL="postgresql://user:password@host:port/database"
-DIRECT_URL="postgresql://user:password@host:port/database"
+DATABASE_URL=...
+DIRECT_URL=...
 
-CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
+
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 
 GEMINI_API_KEY=...
+
 RESEND_API_KEY=...
+RESEND_FROM_EMAIL=reminders@applyntrack.online
 ```
 
-Only Clerk, database, and Supabase variables are needed for currently implemented backend flows. Gemini and Resend are for planned features.
-
-### Frontend
-
-Create `frontend/.env.local`:
+### Frontend — `frontend/.env.local`
 
 ```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...
+CLERK_SECRET_KEY=...
 
 NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
@@ -255,140 +225,57 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard
 
 ## Installation
 
-Install backend dependencies:
-
 ```bash
-cd backend
-npm install
-```
-
-Install frontend dependencies:
-
-```bash
-cd frontend
-npm install
+cd backend && npm install
+cd frontend && npm install
 ```
 
 ## Database Setup
 
-Run Prisma migrations from the backend directory:
-
 ```bash
 cd backend
 npx prisma migrate dev
-```
-
-Generate Prisma client if needed:
-
-```bash
-cd backend
 npx prisma generate
 ```
 
 ## Development
 
-Start the backend:
-
 ```bash
-cd backend
-npm run dev
+# Backend
+cd backend && npm run dev
+
+# Frontend
+cd frontend && npm run dev
 ```
 
-The backend runs on:
-
-```text
-http://localhost:5000
-```
-
-Start the frontend:
-
-```bash
-cd frontend
-npm run dev
-```
-
-The frontend runs on:
-
-```text
-http://localhost:3000
-```
+Backend runs on `http://localhost:5000`
+Frontend runs on `http://localhost:3000`
 
 ## Build
 
-Build the backend:
-
 ```bash
-cd backend
-npm run build
+cd backend && npm run build
+cd frontend && npm run build
 ```
-
-Build the frontend:
-
-```bash
-cd frontend
-npm run build
-```
-
-Both builds passed during the latest codebase review.
-
-Known build warning:
-
-- Next.js reports that the `middleware.ts` convention is deprecated in favor of `proxy`.
-
-## Planned Feature Roadmap
-
-### Phase 1: Core Tracking
-
-- Complete user profile flow.
-- Add application list page.
-- Add application detail page.
-- Add status update support.
-- Build a basic Kanban board.
-
-### Phase 2: AI Features
-
-- Extract or store resume text.
-- Add Gemini resume analysis against job descriptions.
-- Add Gemini interview question generation.
-- Save and fetch interview answers.
-
-### Phase 3: Reminders And Analytics
-
-- Add reminder CRUD endpoints.
-- Add daily cron job for follow-up reminders.
-- Send reminder emails through Resend.
-- Add dashboard statistics endpoint.
-- Add frontend dashboard analytics UI.
-
-### Phase 4: Hardening
-
-- Add global backend error handling.
-- Add request validation.
-- Add frontend API client.
-- Add tests.
-- Improve `.gitignore`.
-- Clean generated output from source control if needed.
-- Prepare deployment configuration.
 
 ## Known Issues
 
-- `README.md` is currently untracked unless it is added to Git.
-- `backend/dist/` may be created after running the backend build and should usually be ignored.
-- `frontend/.env` exists locally and should not be committed.
-- The root `.gitignore` currently does not ignore common generated files and secret files.
-- The current user sync flow may need explicit Clerk bearer token handling for reliable frontend-to-backend authentication across separate origins.
-- Existing user sync returns an existing database user without updating changed Clerk profile details.
-- No tests are implemented yet.
+- Frontend pages for applications, AI features, and dashboard are not yet built.
+- `ApplicationSource` enum has legacy misspellings in the migration history — NAUKARI, REFERAL, COLDEMAIL. These are intentional and consistent throughout the codebase.
+- No global error handler middleware yet.
+- No input validation with Zod yet.
+- No automated tests yet.
+- `.gitignore` at root may need cleanup for dist, generated, and env files.
+- Deprecated `requireAuth` warning from Clerk SDK — functional but should be updated to `clerkMiddleware` with `getAuth`.
 
 ## Useful Files
 
-- `prd.md`: product requirements and long-term feature plan.
-- `project-structure.md`: planned project structure.
-- `task-update.md`: current implementation handoff and session status.
-- `backend/prisma/schema.prisma`: database schema.
-- `backend/src/index.ts`: backend entrypoint.
-- `frontend/app/dashboard/page.tsx`: current authenticated frontend flow.
+- `prd.md` — product requirements.
+- `context.md` — complete project context and session handoff.
+- `task-update.md` — current implementation status.
+- `backend/prisma/schema.prisma` — database schema.
+- `backend/src/index.ts` — backend entrypoint.
 
 ## License
 
-This project currently uses the ISC license listed in `backend/package.json`.
+ISC
