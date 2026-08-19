@@ -8,6 +8,7 @@ import applicationsRouter from "./modules/applications/applications.routes";
 import aiRouter from "./modules/ai/ai.routes"
 import remindersRouter from "./modules/reminders/reminders.routes"
 import { startReminderJob } from "./jobs/reminderJob"
+import dashboardRouter from "./modules/dashboard/dashboard.routes"
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/applications", applicationsRouter);
 app.use("/api/ai", aiRouter)
 app.use("/api/reminders", remindersRouter)
+app.use("/api/dashboard", dashboardRouter)
 // Health check
 app.get("/health", (req, res) => {
   res.status(200).json({ message: "Job tracker's server is live" });

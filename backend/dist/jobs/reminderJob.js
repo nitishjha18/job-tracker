@@ -11,16 +11,16 @@ const startReminderJob = () => {
     node_cron_1.default.schedule("0 9 * * *", async () => {
         console.log("Running daily reminder job...");
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        today.setUTCHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
         const reminders = await db_1.default.reminder.findMany({
             where: {
                 reminderDate: {
                     gte: today,
                     lt: tomorrow
                 },
-                sent: false
+                isSent: false
             },
             include: {
                 user: true,
