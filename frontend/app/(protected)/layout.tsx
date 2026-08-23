@@ -28,22 +28,14 @@ export default function ProtectedLayout({
     sync()
   }, [isLoaded, isSignedIn])
 
-  const sync = async () => {
-  try {
-    const token = await getToken()
-    console.log("Token:", token) // add this
-    if (token) await syncUser(token)
-  } catch (err) {
-    console.error("User sync failed:", err)
-  }
-}
-
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
-        {children}
-      </main>
+      <div className="flex-1 pt-3 pr-3 pb-3">
+        <main className="min-h-full bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

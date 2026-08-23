@@ -1,9 +1,10 @@
+// components/Sidebar.tsx
 "use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useUser, useClerk } from "@clerk/nextjs"
-import { LayoutDashboard, BriefcaseBusiness, User, LogOut } from "lucide-react"
+import { LayoutDashboard, BriefcaseBusiness, User, LogOut, ChevronDown } from "lucide-react"
 
 const navLinks = [
   {
@@ -29,17 +30,31 @@ export default function Sidebar() {
   const { signOut } = useClerk()
 
   return (
-    <aside className="w-[220px] min-h-screen bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-[220px] min-h-screen bg-gray-100 flex flex-col">
 
-      {/* App Name */}
-      <div className="px-5 py-6 border-b border-gray-200">
-        <span className="text-lg font-bold text-violet-700 tracking-tight">
-          ApplynTrack
-        </span>
+      {/* User Identity — top of sidebar like Linear */}
+      <div className="px-3 py-3">
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-100 cursor-pointer transition-colors">
+          {user?.imageUrl ? (
+            <img
+              src={user.imageUrl}
+              alt={user.firstName || "User"}
+              className="w-6 h-6 rounded-full object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 text-[11px] font-bold flex-shrink-0">
+              {user?.firstName?.[0] ?? "U"}
+            </div>
+          )}
+          <span className="text-[13px] font-medium text-gray-800 truncate flex-1">
+            {user?.firstName} {user?.lastName}
+          </span>
+          <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
+        </div>
       </div>
 
       {/* Nav Links */}
-      <nav className="flex flex-col gap-1 px-3 py-4 flex-1">
+      <nav className="flex flex-col gap-0.5 px-3 py-2 flex-1">
         {navLinks.map((link) => {
           const Icon = link.icon
           const isActive = pathname === link.href
@@ -48,45 +63,29 @@ export default function Sidebar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
                 isActive
-                  ? "bg-violet-100 text-violet-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-gray-100 text-gray-900"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
               }`}
             >
-              <Icon size={18} />
+              <Icon
+                size={16}
+                className={isActive ? "text-gray-700" : "text-gray-400"}
+              />
               {link.label}
             </Link>
           )
         })}
       </nav>
 
-      {/* User + Sign Out */}
-      <div className="px-3 py-4 border-t border-gray-200 flex flex-col gap-2">
-        {/* User Info */}
-        <div className="flex items-center gap-3 px-3 py-2">
-          {user?.imageUrl ? (
-            <img
-              src={user.imageUrl}
-              alt={user.firstName || "User"}
-              className="w-7 h-7 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-violet-200 flex items-center justify-center text-violet-700 text-xs font-bold">
-              {user?.firstName?.[0] ?? "U"}
-            </div>
-          )}
-          <span className="text-sm text-gray-700 font-medium truncate">
-            {user?.firstName} {user?.lastName}
-          </span>
-        </div>
-
-        {/* Sign Out */}
+      {/* Sign Out — bottom, subtle */}
+      <div className="px-3 py-3 border-t border-gray-100">
         <button
           onClick={() => signOut({ redirectUrl: "/sign-in" })}
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors w-full"
+          className="flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[13px] font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors w-full"
         >
-          <LogOut size={18} />
+          <LogOut size={16} />
           Sign Out
         </button>
       </div>
