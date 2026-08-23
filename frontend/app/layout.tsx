@@ -1,22 +1,19 @@
-import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
-import "./globals.css";
-
-export const metadata: Metadata = {
-  title: "Job Tracker",
-  description: "Smart job application tracker",
-};
+// app/layout.tsx
+import { ClerkProvider } from "@clerk/nextjs"
+import "./globals.css"
 
 export default function RootLayout({
-  children,
+  children
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>{children}</body>
-      </html>
-    </ClerkProvider>
-  );
+    <html lang="en">
+      <body>
+        <ClerkProvider>
+          {children}
+        </ClerkProvider>
+      </body>
+    </html>
+  )
 }
