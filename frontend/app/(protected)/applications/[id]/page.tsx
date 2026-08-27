@@ -131,6 +131,14 @@ export default function ApplicationDetailPage() {
   return (
     <div className="p-8 max-w-3xl">
 
+      <button
+        onClick={() => router.push("/applications")}
+        className="text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6 flex items-center gap-1"
+        >
+          ← Back to applications
+        
+      </button>
+
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
