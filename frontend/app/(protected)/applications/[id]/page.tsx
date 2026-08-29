@@ -12,6 +12,7 @@ import {
   generateInterviewPrep,
   getAnswers,
   saveAnswers,
+  createReminder
 } from "../../../lib/api"
 import type {
   Application,
@@ -19,6 +20,8 @@ import type {
   AiInterview,
   AiInterviewQuestion,
 } from "../../../types"
+
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +114,13 @@ export default function ApplicationDetailPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [savingAnswers, setSavingAnswers] = useState(false)
   const [answersSaved, setAnswersSaved] = useState(false)
+
+  // ── Reminder state ──
+  const [reminderDate, setReminderDate] = useState("")
+  const [reminderNotes, setReminderNotes] = useState("")
+  const [savingReminder, setSavingReminder] = useState(false)
+  const [reminderSaved, setReminderSaved] = useState(false)
+  const [reminderError, setReminderError] = useState<string | null>(null)
 
   // ─── Mount: load application + existing interview answers ─────────────────
 
@@ -303,6 +313,36 @@ export default function ApplicationDetailPage() {
       setPrepError(err instanceof Error ? err.message : "Failed to save answers")
     } finally {
       setSavingAnswers(false)
+    }
+  }
+
+  // ─── Create Reminder ──────────────────────────────────────────────────────
+
+  const handleCreateReminder = async () => {
+    if (!reminderDate) {
+      setReminderError("Please select a reminder date.")
+      return
+    }
+  
+    setSavingReminder(true)
+    setReminderError(null)
+    setReminderSaved(false)
+  
+    try {
+      const token = await getToken()
+      if (!token) return
+      await createReminder(token, {
+        applicationId: id,
+        reminderDate,
+        notes: reminderNotes.trim() || undefined,
+      })
+      setReminderSaved(true)
+      setReminderDate("")
+      setReminderNotes("")
+    } catch (err: unknown) {
+      setReminderError(err instanceof Error ? err.message : "Failed to set reminder")
+    } finally {
+      setSavingReminder(false)
     }
   }
 
@@ -603,6 +643,54 @@ export default function ApplicationDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Reminder */}
+<div>
+  <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Set Reminder</h2>
+  <div className="border border-gray-100 rounded-xl p-5 space-y-3">
+    <div>
+      <label className="text-xs text-gray-500 mb-1 block">Reminder Date</label>
+      <input
+        type="date"
+        value={reminderDate}
+        onChange={(e) => {
+          setReminderDate(e.target.value)
+          setReminderSaved(false)
+          setReminderError(null)
+        }}
+        min={new Date().toISOString().split("T")[0]}
+        className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300"
+      />
+    </div>
+
+    <div>
+      <label className="text-xs text-gray-500 mb-1 block">Notes (optional)</label>
+      <input
+        type="text"
+        value={reminderNotes}
+        onChange={(e) => setReminderNotes(e.target.value)}
+        placeholder="e.g. Follow up on application status"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-300"
+      />
+    </div>
+
+    <div className="flex items-center gap-3 pt-1">
+      <button
+        onClick={handleCreateReminder}
+        disabled={savingReminder}
+        className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700"
+      >
+        {savingReminder ? "Saving..." : "Set Reminder"}
+      </button>
+      {reminderSaved && (
+        <span className="text-sm text-green-600">Reminder set.</span>
+      )}
+      {reminderError && (
+        <span className="text-sm text-red-500">{reminderError}</span>
+      )}
+    </div>
+  </div>
+</div>
     </div>
   )
 }
