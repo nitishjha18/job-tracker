@@ -182,7 +182,7 @@ app/(protected)/applications/[id]/page.tsx
 
 ### Purpose
 
-The single source of truth for one application. Everything about that application lives here — current status, full history, notes, job description, and eventually AI features and reminders. This is the most information-dense page in the app.
+The single source of truth for one application. Everything about that application lives here — current status, full history, notes, job description, AI features, and eventually reminders. This is the most information-dense page in the app.
 
 ### What It Shows
 
@@ -198,7 +198,11 @@ The single source of truth for one application. Everything about that applicatio
 
 **Job Description section** — Rendered as pre-wrapped text. Only shown if `jobDescription` is not empty. Hidden entirely if the application was created without a job description.
 
-**AI Features section** — Placeholder section with "Resume Analysis" and "Interview Prep" rows. Both show "Coming soon" buttons in a disabled state. This section exists in the UI now so the layout is established before the AI features are built.
+**AI Features section** — Fully wired. Two subsections:
+
+- **Resume Analysis** — "Analyze Resume" button calls `POST /api/ai/analyze-resume`. Client-side pre-check: if `jobDescription` is empty, shows inline warning without hitting the API. If no resume uploaded, surfaces backend 400 error with plain text message directing user to profile page. Results display: match score as a large number, missing keywords as red pills, suggestions as an arrow list. Results are not persisted — recomputed on every click.
+
+- **Interview Prep** — "Generate Questions" button calls `POST /api/ai/interview-prep`. On mount, `GET /api/ai/answers/:appId` is called alongside the application fetch via `Promise.all` — if questions already exist they are pre-populated with saved answers. Questions render as a numbered list each with a textarea. Single "Save Answers" button at the bottom calls `POST /api/ai/save-answers` with all non-empty answers. Button label switches to "Regenerate" when questions already exist. "Answers saved." confirmation shown after successful save.
 
 ### Back Button
 
@@ -236,9 +240,13 @@ Notes are edited in a textarea. The save button is only enabled when the current
 | Action | Endpoint | When |
 |---|---|---|
 | Load application | GET /api/applications/:id | On mount |
+| Load existing answers | GET /api/ai/answers/:appId | On mount (parallel with above) |
 | Change status | PUT /api/applications/:id | On status pill click |
 | Save notes | PUT /api/applications/:id | On save notes button click |
 | Delete | DELETE /api/applications/:id | On confirmed delete |
+| Analyze resume | POST /api/ai/analyze-resume | On button click |
+| Generate questions | POST /api/ai/interview-prep | On button click |
+| Save answers | POST /api/ai/save-answers | On save answers button click |
 
 ### State Variables
 
@@ -251,9 +259,34 @@ const [savingNotes, setSavingNotes] = useState(false)
 const [updatingStatus, setUpdatingStatus] = useState(false)
 const [confirmDelete, setConfirmDelete] = useState(false)
 const [deleting, setDeleting] = useState(false)
+
+// Resume analysis
+const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
+const [analyzingResume, setAnalyzingResume] = useState(false)
+const [analysisError, setAnalysisError] = useState<string | null>(null)
+
+// Interview prep
+const [interviews, setInterviews] = useState<AiInterview[]>([])
+const [generatingPrep, setGeneratingPrep] = useState(false)
+const [prepError, setPrepError] = useState<string | null>(null)
+const [answers, setAnswers] = useState<Record<string, string>>({})
+const [savingAnswers, setSavingAnswers] = useState(false)
+const [answersSaved, setAnswersSaved] = useState(false)
 ```
 
-Each async operation has its own loading boolean rather than a single shared one. This allows the UI to disable only the relevant element during an operation — changing status disables the status pills but not the notes save button.
+Each async operation has its own loading boolean rather than a single shared one. This allows the UI to disable only the relevant element during an operation.
+
+### ResumeAnalysis Type
+
+Not in `types/index.ts` — defined inline in the detail page:
+
+```ts
+interface ResumeAnalysis {
+  matchScore: number
+  missingKeywords: string[]
+  suggestions: string[]
+}
+```
 
 ### Loading and Error States
 
@@ -313,6 +346,7 @@ const SOURCE_LABELS: Record<ApplicationSource, string> = {
 | Zod validation on create form | Deferred — client-side required field check is sufficient for now |
 | Drag and drop Kanban | Polish phase — list view is functional equivalent |
 | Inline edit for company name and job title | Not needed yet — delete and recreate is acceptable at this stage |
+| Persisted resume analysis results | Results are recomputed on demand — inputs are already stored, Gemini is fast enough |
 
 ---
 
@@ -321,17 +355,18 @@ const SOURCE_LABELS: Record<ApplicationSource, string> = {
 - `STATUS_LABELS` and `SOURCE_LABELS` maps are duplicated across list and detail pages — should be extracted to a shared utility
 - No pagination — will become relevant if a user tracks 200+ applications
 - No filter or search on the list page
-- AI features section on detail page is a non-functional stub — buttons are disabled
+- `ResumeAnalysis` type is defined inline in the detail page rather than in `types/index.ts`
 - Notes save button compares against `application.notes ?? ""` — if notes is null and textarea is empty the button stays correctly disabled
+- `getAnswers` returns 404 if no interviews exist — handled with `.catch(() => ({ interviews: [] }))` on mount
 
 ---
 
 ## Future Considerations (Polish Phase)
 
 - Extract shared label maps and formatDate to `lib/applicationUtils.ts`
+- Move `ResumeAnalysis` type to `types/index.ts`
 - Filter applications list by status
 - Search applications by company name
 - Clicking pipeline strip on dashboard navigates to filtered applications list
 - Inline edit for company name and job title on detail page
-- AI features wired up on detail page — resume analysis and interview prep
 - Reminder creation section on detail page

@@ -42,7 +42,7 @@ smarty-j/
         dashboard/page.tsx        ✅ complete — wired with real data
         applications/page.tsx     ✅ complete
         applications/new/page.tsx ✅ complete
-        applications/[id]/page.tsx ✅ complete
+        applications/[id]/page.tsx ✅ complete — AI features wired
         profile/page.tsx          ❌ not built
       sign-in/[[...rest]]/page.tsx ✅ complete
     components/
@@ -105,6 +105,13 @@ The backend is fully built, tested in Postman, and working. It is untouchable un
 - ApplicationSource enum misspellings in migration history
 - pdf2json text extraction uses manual traversal workaround
 
+### Backend fixes applied
+
+- `user.controller.ts` line ~80 — wrapped `decodeURIComponent` in try/catch to handle malformed URI characters in PDF text extraction:
+  ```ts
+  try { text += decodeURIComponent(r.T) + " " } catch { text += r.T + " " }
+  ```
+
 Full details in `docs/architecture.md`.
 
 ---
@@ -164,16 +171,19 @@ All applications as rows in a single bordered container. Each row: company name,
 Form with companyName (required), jobTitle (required), source dropdown (required, defaults to LINKED_IN), dateApplied (defaults to today), jobDescription (optional textarea), notes (optional textarea). On success redirects to `/applications/[id]` of the newly created application.
 
 **Application detail** (`app/(protected)/applications/[id]/page.tsx`)
-Full detail view. Back button navigating to `/applications`. Header with company name, job title, delete button. Meta row with source and date applied. Status section — all six status pills, clicking one updates immediately. History section — statusHistory sorted most recent first. Notes section — inline editable textarea with save button that only enables on unsaved changes. Job description section — only shown if not empty. AI features section — placeholder with disabled "Coming soon" buttons for Resume Analysis and Interview Prep.
+Full detail view. Back button navigating to `/applications`. Header with company name, job title, delete button. Meta row with source and date applied. Status section — all six status pills, clicking one updates immediately. History section — statusHistory sorted most recent first. Notes section — inline editable textarea with save button that only enables on unsaved changes. Job description section — only shown if not empty.
 
 Delete is a two-step flow — click Delete → confirm with "Yes, delete" or cancel.
+
+AI features section — fully wired:
+- **Resume Analysis** — calls `POST /api/ai/analyze-resume`, displays match score, missing keywords as pills, suggestions as a list. Client-side pre-check: if no jobDescription, shows inline warning without hitting the API. If no resume uploaded, surfaces backend 400 error with message directing user to profile page.
+- **Interview Prep** — calls `POST /api/ai/interview-prep`, displays questions with answer textareas. On mount calls `GET /api/ai/answers/:appId` to pre-populate existing saved answers. Save Answers button calls `POST /api/ai/save-answers`. Button label switches to "Regenerate" when questions already exist.
 
 ### What Is Not Built Yet
 
 ```
-app/(protected)/profile/page.tsx    ← next to build after AI features
-AI features on detail page          ← resume analysis and interview prep
-Reminders on detail page            ← set and manage follow-up reminders
+Reminders on detail page            ← next to build
+app/(protected)/profile/page.tsx    ← after reminders
 ```
 
 ---
@@ -187,43 +197,27 @@ This order is locked. Do not skip ahead.
 3. ✅ Create application page
 4. ✅ Application detail page
 5. ✅ Return to dashboard — wire real data (pipeline counts, activity feed)
-6. ❌ AI features on application detail page — resume analysis + interview prep
+6. ✅ AI features on application detail page — resume analysis + interview prep
 7. ❌ Reminders on application detail page
 8. ❌ Profile page
 9. ❌ Polish phase — colors, density, mobile, sidebar collapse, animations
 
 ---
 
-## Next Session — AI Features
+## Next Session — Reminders
 
-The next thing to build is AI features on the application detail page (`app/(protected)/applications/[id]/page.tsx`). The "Coming soon" stubs are already in the UI.
+The next thing to build is the reminders section on the application detail page (`app/(protected)/applications/[id]/page.tsx`).
 
-### Resume Analysis
+### Reminders
 
-Button: "Analyze Resume"
-- Calls `POST /api/ai/analyze-resume` with `{ applicationId }`
-- Requires: user must have uploaded a resume, application must have a jobDescription
-- Response: `{ analysis: { matchScore, missingKeywords, suggestions } }`
-- Display: match score as a number, missing keywords as pills, suggestions as a list
-- Results are NOT saved to the database — recomputed on every click
-- Error cases to handle: no resume uploaded, no job description on this application
+- A date picker and optional notes field at the bottom of the detail page
+- Submit calls `POST /api/reminders` with `{ applicationId, reminderDate, notes }`
+- If a reminder already exists for this application, show it with an option to update or delete
+- Update calls `PUT /api/reminders/:id` with `{ reminderDate, notes }`
+- Delete calls `DELETE /api/reminders/:id`
+- The backend cron job handles sending the email — the frontend only manages CRUD
 
-### Interview Prep
-
-Button: "Generate Interview Questions"
-- Calls `POST /api/ai/interview-prep` with `{ applicationId }`
-- Response: `{ interviewPrep: { interviewId, questions: [...] } }`
-- Questions are saved to the database on the backend — fetching again returns the same questions
-- On mount also call `GET /api/ai/answers/:appId` to check for existing saved questions
-- Display: list of questions each with a textarea for the user's answer
-- Save answers button calls `POST /api/ai/save-answers` with all answers in one call
-- Response: `{ saved: N }`
-
-### Prerequisites to warn user about
-
-Before triggering either AI feature, check:
-- Resume analysis: if `application.jobDescription` is empty, show a warning instead of calling the API
-- Both features: if user has no resume uploaded, the backend returns a 400 — surface this error clearly with a link or message directing them to the profile page to upload
+Note: The current `GET /api/applications/:id` response does not include reminders. The reminders endpoint is separate. Decide at build time whether to fetch the reminder on mount via a separate call or derive it another way.
 
 ---
 

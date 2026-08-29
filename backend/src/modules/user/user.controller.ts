@@ -77,7 +77,7 @@ const resumeText = await new Promise<string>((resolve, reject) => {
     pdfData.Pages.forEach((page: any) => {
       page.Texts.forEach((textItem: any) => {
         textItem.R.forEach((r: any) => {
-          text += decodeURIComponent(r.T) + " "
+          try { text += decodeURIComponent(r.T) + " " } catch { text += r.T + " " }
         })
       })
       text += "\n"

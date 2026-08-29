@@ -1,19 +1,34 @@
 "use client"
 
-import { useAuth } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
-import { getApplication, updateApplication, deleteApplication } from "../../../lib/api"
-import { ApplicationSource } from "../../../types"
+import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
+import { useAuth } from "@clerk/nextjs"
+import {
+  getApplication,
+  updateApplication,
+  deleteApplication,
+  analyzeResume,
+  generateInterviewPrep,
+  getAnswers,
+  saveAnswers,
+} from "../../../lib/api"
+import type {
+  Application,
+  ApplicationStatus,
+  AiInterview,
+  AiInterviewQuestion,
+} from "../../../types"
 
-const STATUS_STYLES: Record<ApplicationStatus, string> = {
-  APPLIED: "bg-blue-50 text-blue-700",
-  SCREENING: "bg-yellow-50 text-yellow-700",
-  INTERVIEW: "bg-purple-50 text-purple-700",
-  ASSIGNMENT: "bg-orange-50 text-orange-700",
-  OFFER: "bg-green-50 text-green-700",
-  REJECTED: "bg-red-50 text-red-700",
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ResumeAnalysis {
+  matchScore: number
+  missingKeywords: string[]
+  suggestions: string[]
 }
+
+// ─── Label Maps ───────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
   APPLIED: "Applied",
@@ -24,7 +39,16 @@ const STATUS_LABELS: Record<ApplicationStatus, string> = {
   REJECTED: "Rejected",
 }
 
-const SOURCE_LABELS: Record<ApplicationSource, string> = {
+const STATUS_COLORS: Record<ApplicationStatus, string> = {
+  APPLIED: "bg-blue-100 text-blue-700 border-blue-200",
+  SCREENING: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  INTERVIEW: "bg-purple-100 text-purple-700 border-purple-200",
+  ASSIGNMENT: "bg-orange-100 text-orange-700 border-orange-200",
+  OFFER: "bg-green-100 text-green-700 border-green-200",
+  REJECTED: "bg-red-100 text-red-700 border-red-200",
+}
+
+const SOURCE_LABELS: Record<string, string> = {
   LINKED_IN: "LinkedIn",
   NAUKARI: "Naukri",
   REFERAL: "Referral",
@@ -42,6 +66,8 @@ const ALL_STATUSES: ApplicationStatus[] = [
   "REJECTED",
 ]
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -50,122 +76,306 @@ function formatDate(dateStr: string) {
   })
 }
 
-export default function ApplicationDetailPage() {
-  const { getToken } = useAuth()
-  const router = useRouter()
-  const params = useParams()
-  const id = params.id as string
+// ─── Component ────────────────────────────────────────────────────────────────
 
+export default function ApplicationDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { getToken } = useAuth()
+
+  // ── Core application state ──
   const [application, setApplication] = useState<Application | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ── Notes state ──
   const [notes, setNotes] = useState("")
   const [savingNotes, setSavingNotes] = useState(false)
+
+  // ── Status state ──
   const [updatingStatus, setUpdatingStatus] = useState(false)
+
+  // ── Delete state ──
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // ── Resume analysis state ──
+  const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
+  const [analyzingResume, setAnalyzingResume] = useState(false)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+
+  // ── Interview prep state ──
+  const [interviews, setInterviews] = useState<AiInterview[]>([])
+  const [generatingPrep, setGeneratingPrep] = useState(false)
+  const [prepError, setPrepError] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [savingAnswers, setSavingAnswers] = useState(false)
+  const [answersSaved, setAnswersSaved] = useState(false)
+
+  // ─── Mount: load application + existing interview answers ─────────────────
+
   useEffect(() => {
-    const fetch = async () => {
+    if (!id) return
+
+    const load = async () => {
       try {
         const token = await getToken()
         if (!token) return
-        const data = await getApplication(token, id)
-        setApplication(data.application)
-        setNotes(data.application.notes ?? "")
-      } catch (err: any) {
-        setError(err.message)
+
+        // Parallel fetch — application data and any existing interview answers
+        const [appData, answersData] = await Promise.all([
+          getApplication(token, id),
+          getAnswers(token, id).catch(() => ({ interviews: [] })),
+          // getAnswers can 404 if no interviews exist yet — treat that as empty
+        ])
+
+        const app: Application = appData.application
+        setApplication(app)
+        setNotes(app.notes ?? "")
+
+        // If interview questions already exist, populate them
+        if (answersData.interviews && answersData.interviews.length > 0) {
+          setInterviews(answersData.interviews)
+
+          // Pre-populate answers map from saved answers
+          const savedAnswers: Record<string, string> = {}
+          answersData.interviews.forEach((interview: AiInterview) => {
+            interview.questions.forEach((q: AiInterviewQuestion) => {
+              savedAnswers[q.id] = q.userAnswer ?? ""
+            })
+          })
+          setAnswers(savedAnswers)
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load application")
       } finally {
         setLoading(false)
       }
     }
-    fetch()
-  }, [id])
+
+    load()
+  }, [id, getToken])
+
+  // ─── Status update ────────────────────────────────────────────────────────
 
   const handleStatusChange = async (newStatus: ApplicationStatus) => {
-    if (!application) return
+    if (!application || updatingStatus || newStatus === application.status) return
+
+    setUpdatingStatus(true)
     try {
-      setUpdatingStatus(true)
       const token = await getToken()
       if (!token) return
       const data = await updateApplication(token, id, { status: newStatus })
       setApplication(data.application)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update status")
     } finally {
       setUpdatingStatus(false)
     }
   }
 
+  // ─── Notes save ───────────────────────────────────────────────────────────
+
   const handleSaveNotes = async () => {
+    if (!application || savingNotes) return
+
+    setSavingNotes(true)
     try {
-      setSavingNotes(true)
       const token = await getToken()
       if (!token) return
       const data = await updateApplication(token, id, { notes })
       setApplication(data.application)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save notes")
     } finally {
       setSavingNotes(false)
     }
   }
 
+  // ─── Delete ───────────────────────────────────────────────────────────────
+
   const handleDelete = async () => {
+    setDeleting(true)
     try {
-      setDeleting(true)
       const token = await getToken()
       if (!token) return
       await deleteApplication(token, id)
       router.push("/applications")
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete application")
       setDeleting(false)
+      setConfirmDelete(false)
     }
   }
 
-  if (loading) return <div className="p-8 text-sm text-gray-400">Loading...</div>
-  if (error) return <div className="p-8 text-sm text-red-500">{error}</div>
-  if (!application) return <div className="p-8 text-sm text-gray-400">Application not found.</div>
+  // ─── Resume Analysis ──────────────────────────────────────────────────────
+
+  const handleAnalyzeResume = async () => {
+    if (!application) return
+
+    // Client-side pre-check — no point calling the API without a JD
+    if (!application.jobDescription) {
+      setAnalysisError("Add a job description to this application first.")
+      return
+    }
+
+    setAnalyzingResume(true)
+    setAnalysis(null)
+    setAnalysisError(null)
+
+    try {
+      const token = await getToken()
+      if (!token) return
+      const data = await analyzeResume(token, id)
+      setAnalysis(data.analysis)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Analysis failed"
+      // Surface the backend's specific error messages clearly
+      if (message.toLowerCase().includes("resume")) {
+        setAnalysisError("No resume uploaded. Upload one from your profile page.")
+      } else {
+        setAnalysisError(message)
+      }
+    } finally {
+      setAnalyzingResume(false)
+    }
+  }
+
+  // ─── Interview Prep ───────────────────────────────────────────────────────
+
+  const handleGenerateInterviewPrep = async () => {
+    setGeneratingPrep(true)
+    setPrepError(null)
+
+    try {
+      const token = await getToken()
+      if (!token) return
+      const data = await generateInterviewPrep(token, id)
+
+      // Backend returns { interviewPrep: { interviewId, questions } }
+      // We need to shape this into AiInterview format for our state
+      const newInterview: AiInterview = {
+        id: data.interviewPrep.interviewId,
+        applicationId: id,
+        overallScore: null,
+        overallFeedback: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        questions: data.interviewPrep.questions,
+      }
+
+      setInterviews([newInterview])
+
+      // Initialize answers map for the new questions
+      const freshAnswers: Record<string, string> = {}
+      data.interviewPrep.questions.forEach((q: AiInterviewQuestion) => {
+        freshAnswers[q.id] = q.userAnswer ?? ""
+      })
+      setAnswers(freshAnswers)
+      setAnswersSaved(false)
+    } catch (err: unknown) {
+      setPrepError(err instanceof Error ? err.message : "Failed to generate questions")
+    } finally {
+      setGeneratingPrep(false)
+    }
+  }
+
+  // ─── Save Answers ─────────────────────────────────────────────────────────
+
+  const handleSaveAnswers = async () => {
+    if (interviews.length === 0) return
+
+    setSavingAnswers(true)
+    setAnswersSaved(false)
+
+    try {
+      const token = await getToken()
+      if (!token) return
+
+      // Build the payload — one entry per question that has an answer
+      const answersPayload = Object.entries(answers)
+        .filter(([, answer]) => answer.trim() !== "")
+        .map(([questionId, answer]) => ({ questionId, answer }))
+
+      await saveAnswers(token, answersPayload)
+      setAnswersSaved(true)
+    } catch (err: unknown) {
+      setPrepError(err instanceof Error ? err.message : "Failed to save answers")
+    } finally {
+      setSavingAnswers(false)
+    }
+  }
+
+  // ─── Render: loading / error ──────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="p-8 text-gray-500">Loading...</div>
+    )
+  }
+
+  if (error && !application) {
+    return (
+      <div className="p-8 text-red-500">{error}</div>
+    )
+  }
+
+  if (!application) {
+    return (
+      <div className="p-8 text-gray-500">Application not found.</div>
+    )
+  }
+
+  const notesChanged = notes !== (application.notes ?? "")
+  const currentQuestions = interviews.flatMap((i) => i.questions).sort(
+    (a, b) => a.questionNumber - b.questionNumber
+  )
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="max-w-3xl mx-auto p-8 space-y-8">
 
-      <button
-        onClick={() => router.push("/applications")}
-        className="text-xs text-gray-400 hover:text-gray-700 transition-colors mb-6 flex items-center gap-1"
-        >
-          ← Back to applications
-        
-      </button>
+      {/* Back */}
+      <Link
+        href="/applications"
+        className="text-sm text-gray-500 hover:text-gray-700"
+      >
+        ← Back to applications
+      </Link>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-medium text-gray-900">{application.companyName}</h1>
-          <p className="text-sm text-gray-500 mt-1">{application.jobTitle}</p>
+          <h1 className="text-2xl font-semibold text-gray-900">{application.companyName}</h1>
+          <p className="text-gray-500 mt-1">{application.jobTitle}</p>
+          <p className="text-sm text-gray-400 mt-1">
+            {SOURCE_LABELS[application.source]} · {formatDate(application.dateApplied)}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Delete */}
+        <div>
           {!confirmDelete ? (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="text-sm text-red-400 hover:text-red-600 transition-colors"
+              className="text-sm text-red-500 hover:text-red-700"
             >
               Delete
             </button>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Are you sure?</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">Are you sure?</span>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="text-sm text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                className="text-sm text-red-600 font-medium hover:text-red-800 disabled:opacity-50"
               >
                 {deleting ? "Deleting..." : "Yes, delete"}
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                className="text-sm text-gray-500 hover:text-gray-700"
               >
                 Cancel
               </button>
@@ -174,30 +384,24 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
 
-      {/* Meta */}
-      <div className="flex items-center gap-4 mb-8">
-        <span className="text-xs text-gray-400">
-          {SOURCE_LABELS[application.source]}
-        </span>
-        <span className="text-xs text-gray-300">·</span>
-        <span className="text-xs text-gray-400">
-          Applied {formatDate(application.dateApplied)}
-        </span>
-      </div>
+      {/* Inline error (for status/notes/delete errors that don't kill the page) */}
+      {error && application && (
+        <p className="text-sm text-red-500">{error}</p>
+      )}
 
       {/* Status */}
-      <div className="border border-gray-200 rounded-xl p-5 mb-5">
-        <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Status</p>
+      <div>
+        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Status</h2>
         <div className="flex flex-wrap gap-2">
           {ALL_STATUSES.map((status) => (
             <button
               key={status}
               onClick={() => handleStatusChange(status)}
               disabled={updatingStatus}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors disabled:opacity-50 ${
+              className={`px-3 py-1.5 rounded-full text-sm border font-medium transition-opacity disabled:opacity-50 ${
                 application.status === status
-                  ? STATUS_STYLES[status]
-                  : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                  ? STATUS_COLORS[status]
+                  : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100"
               }`}
             >
               {STATUS_LABELS[status]}
@@ -206,84 +410,199 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
 
-      {/* Status history */}
-      <div className="border border-gray-200 rounded-xl p-5 mb-5">
-        <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">History</p>
-        <div className="flex flex-col gap-3">
-          {application.statusHistory && application.statusHistory.length > 0 ? (
-            [...application.statusHistory]
+      {/* History */}
+      {application.statusHistory && application.statusHistory.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">History</h2>
+          <div className="space-y-2">
+            {[...application.statusHistory]
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLES[entry.status]}`}>
+                <div key={entry.id} className="flex items-center justify-between text-sm">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full border text-xs font-medium ${STATUS_COLORS[entry.status]}`}
+                  >
                     {STATUS_LABELS[entry.status]}
                   </span>
-                  <span className="text-xs text-gray-400">{formatDate(entry.createdAt)}</span>
+                  <span className="text-gray-400">{formatDate(entry.createdAt)}</span>
                 </div>
-              ))
-          ) : (
-            <p className="text-sm text-gray-400">No history yet.</p>
-          )}
+              ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notes */}
-      <div className="border border-gray-200 rounded-xl p-5 mb-5">
-        <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Notes</p>
+      <div>
+        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Notes</h2>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           placeholder="Add notes about this application..."
-          className="w-full text-sm text-gray-900 outline-none resize-none placeholder:text-gray-300"
+          className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-gray-300"
         />
-        <div className="flex justify-end mt-3">
+        <div className="mt-2 flex justify-end">
           <button
             onClick={handleSaveNotes}
-            disabled={savingNotes || notes === (application.notes ?? "")}
-            className="text-xs bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+            disabled={!notesChanged || savingNotes}
+            className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-40 hover:bg-gray-700"
           >
             {savingNotes ? "Saving..." : "Save notes"}
           </button>
         </div>
       </div>
 
-      {/* Job description */}
+      {/* Job Description */}
       {application.jobDescription && (
-        <div className="border border-gray-200 rounded-xl p-5 mb-5">
-          <p className="text-xs text-gray-400 uppercase tracking-widest mb-3">Job Description</p>
-          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+        <div>
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Job Description</h2>
+          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 rounded-lg p-4 border border-gray-100">
             {application.jobDescription}
-          </p>
+          </pre>
         </div>
       )}
 
-      {/* AI features — stubs */}
-      <div className="border border-gray-200 rounded-xl p-5">
-        <p className="text-xs text-gray-400 uppercase tracking-widest mb-4">AI Features</p>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+      {/* ── AI Features ────────────────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-6">AI Features</h2>
+
+        {/* Resume Analysis */}
+        <div className="border border-gray-100 rounded-xl p-5 mb-4">
+          <div className="flex items-start justify-between mb-1">
             <div>
-              <p className="text-sm font-medium text-gray-900">Resume Analysis</p>
-              <p className="text-xs text-gray-400 mt-0.5">Compare your resume against this job description</p>
+              <h3 className="text-sm font-semibold text-gray-800">Resume Analysis</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Compares your resume against the job description
+              </p>
             </div>
-            <button disabled className="text-xs bg-gray-100 text-gray-400 px-3 py-1.5 rounded-lg cursor-not-allowed">
-              Coming soon
+            <button
+              onClick={handleAnalyzeResume}
+              disabled={analyzingResume}
+              className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700 whitespace-nowrap"
+            >
+              {analyzingResume ? "Analyzing..." : "Analyze Resume"}
             </button>
           </div>
-          <hr className="border-gray-100" />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Interview Prep</p>
-              <p className="text-xs text-gray-400 mt-0.5">Generate likely interview questions for this role</p>
+
+          {/* Analysis error */}
+          {analysisError && (
+            <p className="mt-3 text-sm text-red-500">{analysisError}</p>
+          )}
+
+          {/* Analysis results */}
+          {analysis && (
+            <div className="mt-4 space-y-4">
+              {/* Match Score */}
+              <div className="flex items-center gap-3">
+                <span className="text-3xl font-bold text-gray-900">{analysis.matchScore}%</span>
+                <span className="text-sm text-gray-500">match with this job description</span>
+              </div>
+
+              {/* Missing Keywords */}
+              {analysis.missingKeywords.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                    Missing Keywords
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {analysis.missingKeywords.map((keyword) => (
+                      <span
+                        key={keyword}
+                        className="px-2.5 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded-full text-xs"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Suggestions */}
+              {analysis.suggestions.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                    Suggestions
+                  </p>
+                  <ul className="space-y-1.5">
+                    {analysis.suggestions.map((suggestion, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-gray-700">
+                        <span className="text-gray-300 mt-0.5">→</span>
+                        <span>{suggestion}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <button disabled className="text-xs bg-gray-100 text-gray-400 px-3 py-1.5 rounded-lg cursor-not-allowed">
-              Coming soon
+          )}
+        </div>
+
+        {/* Interview Prep */}
+        <div className="border border-gray-100 rounded-xl p-5">
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">Interview Prep</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                AI-generated questions based on the job description
+              </p>
+            </div>
+            <button
+              onClick={handleGenerateInterviewPrep}
+              disabled={generatingPrep}
+              className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700 whitespace-nowrap"
+            >
+              {generatingPrep
+                ? "Generating..."
+                : currentQuestions.length > 0
+                ? "Regenerate"
+                : "Generate Questions"}
             </button>
           </div>
+
+          {/* Prep error */}
+          {prepError && (
+            <p className="mt-3 text-sm text-red-500">{prepError}</p>
+          )}
+
+          {/* Questions + Answer textareas */}
+          {currentQuestions.length > 0 && (
+            <div className="mt-4 space-y-5">
+              {currentQuestions.map((q, index) => (
+                <div key={q.id}>
+                  <p className="text-sm font-medium text-gray-800 mb-1.5">
+                    {index + 1}. {q.question}
+                  </p>
+                  <textarea
+                    value={answers[q.id] ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                    }
+                    rows={3}
+                    placeholder="Write your answer..."
+                    className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  />
+                </div>
+              ))}
+
+              {/* Save answers */}
+              <div className="flex items-center justify-between pt-1">
+                {answersSaved && (
+                  <span className="text-sm text-green-600">Answers saved.</span>
+                )}
+                <div className="ml-auto">
+                  <button
+                    onClick={handleSaveAnswers}
+                    disabled={savingAnswers}
+                    className="text-sm px-4 py-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 hover:bg-gray-700"
+                  >
+                    {savingAnswers ? "Saving..." : "Save Answers"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
     </div>
   )
 }
